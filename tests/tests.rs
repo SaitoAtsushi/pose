@@ -62,4 +62,5 @@ fn it_works() {
         ])),
     );
     test_parse(";nothing object", Ok(PoseType::EOF));
+    test_parse("@abc", Err(PoseError::InvalidFirstLetter));
 }

@@ -18,6 +18,7 @@ pub enum PoseError {
     InvalidString,
     InvalidNumber,
     NothingClosingParenthesis,
+    InvalidFirstLetter,
 }
 
 type PoseResult = Result<PoseType, PoseError>;
@@ -202,7 +203,7 @@ impl<T: Iterator<Item = char>> Pose<T> {
                 }
                 Ok(PoseType::Symbol(name))
             }
-            _ => Ok(PoseType::Number(1.0)),
+            _ => Err(PoseError::InvalidFirstLetter),
         }
     }
 }
