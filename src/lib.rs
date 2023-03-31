@@ -193,11 +193,11 @@ impl<T: Iterator<Item = char>> Pose<T> {
             Some(ch) if ch.is_ascii_digit() => Ok(PoseType::Number(
                 self.read_number().ok_or(PoseError::InvalidNumber)?,
             )),
-            Some(ch) if ch.is_ascii_alphabetic() || "!$&*+-/<=>_".contains(*ch) => {
+            Some(ch) if ch.is_ascii_lowercase() || "!$&*+-/<=>_".contains(*ch) => {
                 let mut name = String::from(self.src.next().unwrap());
                 while let Some(ch) = self
                     .src
-                    .next_if(|&ch| ch.is_ascii_alphanumeric() || "!$&*+-/<=>_.?@".contains(ch))
+                    .next_if(|&ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch))
                 {
                     name.push(ch)
                 }
