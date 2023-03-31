@@ -97,7 +97,7 @@ impl<T: Iterator<Item = char>> Pose<T> {
 
     fn read_exp_part(&mut self) -> Option<i32> {
         if self.src.next_if(|&ch| ch == 'e' || ch == 'E').is_some() {
-            let flag = self.src.next_if(|&ch| ch == '+' || ch == '-')?;
+            let flag = self.src.next_if(|&ch| ch == '+' || ch == '-').unwrap_or('+');
             let mut num = self
                 .src
                 .next_if(char::is_ascii_digit)?
