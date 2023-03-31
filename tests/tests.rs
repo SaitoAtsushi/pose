@@ -21,6 +21,7 @@ fn it_works() {
     test_parse("1", Ok(PoseType::Number(1.0)));
     test_parse("-2.34", Ok(PoseType::Number(-2.34)));
     test_parse("-2.abc", Err(PoseError::InvalidNumber));
+    test_parse("-2.0E+12", Ok(PoseType::Number(-2000000000000.0)));
     test_parse("-2.0e12", Err(PoseError::InvalidNumber));
     test_parse("-0abc", Ok(PoseType::Number(-0.0)));
     test_parse("+abc", Ok(PoseType::Symbol("+abc".into())));

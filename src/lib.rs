@@ -96,7 +96,7 @@ impl<T: Iterator<Item = char>> Pose<T> {
     }
 
     fn read_exp_part(&mut self) -> Option<i32> {
-        if self.src.next_if(|&ch| ch == 'e').is_some() {
+        if self.src.next_if(|&ch| ch == 'e' || ch == 'E').is_some() {
             let flag = self.src.next_if(|&ch| ch == '+' || ch == '-')?;
             let mut num = self
                 .src
@@ -195,10 +195,9 @@ impl<T: Iterator<Item = char>> Pose<T> {
             )),
             Some(ch) if ch.is_ascii_lowercase() || "!$&*+-/<=>_".contains(*ch) => {
                 let mut name = String::from(self.src.next().unwrap());
-                while let Some(ch) = self
-                    .src
-                    .next_if(|&ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch))
-                {
+                while let Some(ch) = self.src.next_if(|&ch| {
+                    ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch)
+                }) {
                     name.push(ch)
                 }
                 Ok(PoseType::Symbol(name))
