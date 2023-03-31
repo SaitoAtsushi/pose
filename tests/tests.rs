@@ -9,6 +9,8 @@ fn test_parse(testcase: &str, expect_result: Result<PoseType, PoseError>) {
 #[test]
 fn it_works() {
     test_parse(";abc\n\"abc\"", Ok(PoseType::String("abc".into())));
+    test_parse(" :abc\n\"abc\"", Ok(PoseType::Symbol(":abc".into())));
+    test_parse(" :@", Err(PoseError::InvalidSymbol));
     test_parse("ABC", Err(PoseError::InvalidFirstLetter));
     test_parse("\"a\\\"bc\"", Ok(PoseType::String("a\"bc".into())));
     test_parse("\"a\\bc\"", Err(PoseError::InvalidString));

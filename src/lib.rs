@@ -17,6 +17,7 @@ pub enum PoseType {
 pub enum PoseError {
     InvalidString,
     InvalidNumber,
+    InvalidSymbol,
     NothingClosingParenthesis,
     InvalidFirstLetter,
 }
@@ -25,11 +26,15 @@ type PoseResult = Result<PoseType, PoseError>;
 
 impl<T: Iterator<Item = char>> Pose<T> {
     fn is_signsym_2nd(ch: &char) -> bool {
-        ch.is_alphabetic() || "!$&*+-/<=>_.?@".contains(*ch)
+        ch.is_ascii_lowercase() || "!$&*+-/<=>_.?@".contains(*ch)
     }
 
     fn is_signsym_cont(ch: &char) -> bool {
         Self::is_signsym_2nd(ch) || ch.is_ascii_digit()
+    }
+
+    fn is_wordsym_1st(ch: &char) -> bool {
+        ch.is_ascii_lowercase() || "!$&*+-/<=>_".contains(*ch)
     }
 
     pub fn new(src: T) -> Self {
@@ -97,7 +102,10 @@ impl<T: Iterator<Item = char>> Pose<T> {
 
     fn read_exp_part(&mut self) -> Option<i32> {
         if self.src.next_if(|&ch| ch == 'e' || ch == 'E').is_some() {
-            let flag = self.src.next_if(|&ch| ch == '+' || ch == '-').unwrap_or('+');
+            let flag = self
+                .src
+                .next_if(|&ch| ch == '+' || ch == '-')
+                .unwrap_or('+');
             let mut num = self
                 .src
                 .next_if(char::is_ascii_digit)?
@@ -121,6 +129,16 @@ impl<T: Iterator<Item = char>> Pose<T> {
         let num = num + self.read_decimal_part()?;
         let e = self.read_exp_part()?;
         Some(num * 10.0_f64.powi(e))
+    }
+
+    fn read_wordsym(&mut self) -> Option<String> {
+        let mut name = String::from(self.src.next_if(Self::is_wordsym_1st)?);
+        while let Some(ch) = self.src.next_if(|&ch| {
+            ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch)
+        }) {
+            name.push(ch)
+        }
+        Some(name)
     }
 
     pub fn read(&mut self) -> PoseResult {
@@ -193,14 +211,14 @@ impl<T: Iterator<Item = char>> Pose<T> {
             Some(ch) if ch.is_ascii_digit() => Ok(PoseType::Number(
                 self.read_number().ok_or(PoseError::InvalidNumber)?,
             )),
-            Some(ch) if ch.is_ascii_lowercase() || "!$&*+-/<=>_".contains(*ch) => {
-                let mut name = String::from(self.src.next().unwrap());
-                while let Some(ch) = self.src.next_if(|&ch| {
-                    ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch)
-                }) {
-                    name.push(ch)
-                }
-                Ok(PoseType::Symbol(name))
+            Some(ch) if Self::is_wordsym_1st(ch) => Ok(PoseType::Symbol(
+                self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
+            )),
+            Some(':') => {
+                self.src.next();
+                Ok(PoseType::Symbol(
+                    String::from(":") + &self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
+                ))
             }
             _ => Err(PoseError::InvalidFirstLetter),
         }
