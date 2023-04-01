@@ -21,6 +21,7 @@ fn it_works() {
     );
     test_parse("0", Ok(PoseType::Number(0.0)));
     test_parse("1", Ok(PoseType::Number(1.0)));
+    test_parse("-150.05", Ok(PoseType::Number(-150.05)));
     test_parse("-2.34", Ok(PoseType::Number(-2.34)));
     test_parse("-2.abc", Err(PoseError::InvalidNumber));
     test_parse("-2.0E+12", Ok(PoseType::Number(-2000000000000.0)));
@@ -65,6 +66,43 @@ fn it_works() {
             PoseType::Number(123.0),
         ])),
     );
-    test_parse(";nothing object", Ok(PoseType::EOF));
+    test_parse(";nothing object", Ok(PoseType::End));
     test_parse("@abc", Err(PoseError::InvalidFirstLetter));
+
+    assert_eq!("abc".parse(), Ok(PoseType::Symbol("abc".into())));
+    assert_eq!("abc n".parse::<PoseType>(), Err(PoseError::InvalidEnd));
+
+    assert_eq!(
+        format!("{}", " ;comment\nabc ".parse::<PoseType>().unwrap()),
+        "abc"
+    );
+    assert_eq!(format!("{}", "1.543".parse::<PoseType>().unwrap()), "1.543");
+    assert_eq!(
+        format!("{}", "150.05".parse::<PoseType>().unwrap()),
+        "150.05"
+    );
+    assert_eq!(
+        format!("{}", "-150.05".parse::<PoseType>().unwrap()),
+        "-150.05"
+    );
+    assert_eq!(
+        format!("{}", "1.5e100".parse::<PoseType>().unwrap()),
+        "1.5e100"
+    );
+    assert_eq!(
+        format!("{}", "150000000000000".parse::<PoseType>().unwrap()),
+        "150000000000000"
+    );
+    assert_eq!(
+        format!("{}", "1500000000000000".parse::<PoseType>().unwrap()),
+        "1.5e15"
+    );
+    assert_eq!(
+        format!("{}", "-1500000000000000".parse::<PoseType>().unwrap()),
+        "-1.5e15"
+    );
+    assert_eq!(
+        format!("{}", "0.000000532".parse::<PoseType>().unwrap()),
+        "5.32e-7"
+    );
 }

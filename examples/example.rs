@@ -5,7 +5,7 @@ fn main() {
     let mut parser = Pose::new(testcase.chars());
     while {
         match parser.read() {
-            Ok(PoseType::EOF) => false,
+            Ok(PoseType::End) => false,
             Ok(item) => {
                 println!("{:?}", item);
                 true

@@ -1,226 +1,70 @@
-use std::result::Result;
+use std::{fmt::Display, fmt::Formatter};
+pub mod parser;
+pub use parser::*;
+pub mod types;
+pub use types::*;
 
-pub struct Pose<T: std::iter::Iterator<Item = char>> {
-    src: std::iter::Peekable<T>,
-}
+struct FixedPoint(f64);
 
-#[derive(Debug, PartialEq)]
-pub enum PoseType {
-    String(String),
-    Number(f64),
-    Symbol(String),
-    List(Vec<PoseType>),
-    EOF,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum PoseError {
-    InvalidString,
-    InvalidNumber,
-    InvalidSymbol,
-    NothingClosingParenthesis,
-    InvalidFirstLetter,
-}
-
-type PoseResult = Result<PoseType, PoseError>;
-
-impl<T: Iterator<Item = char>> Pose<T> {
-    fn is_signsym_2nd(ch: &char) -> bool {
-        ch.is_ascii_lowercase() || "!$&*+-/<=>_.?@".contains(*ch)
-    }
-
-    fn is_signsym_cont(ch: &char) -> bool {
-        Self::is_signsym_2nd(ch) || ch.is_ascii_digit()
-    }
-
-    fn is_wordsym_1st(ch: &char) -> bool {
-        ch.is_ascii_lowercase() || "!$&*+-/<=>_".contains(*ch)
-    }
-
-    pub fn new(src: T) -> Self {
-        Self {
-            src: src.peekable(),
-        }
-    }
-
-    fn skip_space(&mut self) {
-        while self
-            .src
-            .next_if(|&ch| ch.is_ascii_whitespace() || ch == '\x0b')
-            .is_some()
-        {}
-    }
-
-    fn read_string(&mut self) -> Option<String> {
-        let mut str = String::new();
-
-        loop {
-            match self.src.next()? {
-                '"' => break,
-                '\\' => match self.src.next()? {
-                    '\\' => str.push('\\'),
-                    '"' => str.push('"'),
-                    _ => None?,
-                },
-                ch => str.push(ch),
-            }
-        }
-        Some(str)
-    }
-
-    fn read_integer_part(&mut self) -> Option<f64> {
-        let ch = self.src.next_if(char::is_ascii_digit)?;
-        if ch == '0' {
-            return Some(0.0);
-        }
-        let mut num: f64 = ch.to_digit(10).unwrap() as f64;
-        while let Some(ch) = self.src.next_if(char::is_ascii_digit) {
-            num *= 10.0;
-            num += ch.to_digit(10).unwrap() as f64;
-        }
-        Some(num)
-    }
-
-    fn read_decimal_part(&mut self) -> Option<f64> {
-        Some(if self.src.next_if_eq(&'.').is_some() {
-            let mut mask: f64 = 0.1;
-            let mut num: f64 = mask
-                * self
-                    .src
-                    .next_if(char::is_ascii_digit)?
-                    .to_digit(10)
-                    .unwrap() as f64;
-            while let Some(ch) = self.src.next_if(char::is_ascii_digit) {
-                mask *= 0.1;
-                num += mask * (ch.to_digit(10)? as f64);
-            }
-            num
+impl Display for FixedPoint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (flag, absolute) = if self.0 < 0.0 {
+            ("-", -self.0)
         } else {
-            0.0
-        })
-    }
+            ("", self.0)
+        };
+        let log10 = absolute.log10();
+        const PREC: usize = 15;
+        let fr = absolute.fract();
+        let tr = absolute.trunc();
+        let p = log10.ceil() as usize;
+        write!(f, "{}{}", flag, tr as u64)?;
+        let mut width = PREC - p;
+        let mut fr = ((10.0_f64.powi(width.try_into().unwrap())) as f64 * fr) as u64;
 
-    fn read_exp_part(&mut self) -> Option<i32> {
-        if self.src.next_if(|&ch| ch == 'e' || ch == 'E').is_some() {
-            let flag = self
-                .src
-                .next_if(|&ch| ch == '+' || ch == '-')
-                .unwrap_or('+');
-            let mut num = self
-                .src
-                .next_if(char::is_ascii_digit)?
-                .to_digit(10)
-                .unwrap() as i32;
-            while let Some(ch) = self.src.next_if(char::is_ascii_digit) {
-                num *= 10;
-                num += ch.to_digit(10).unwrap() as i32;
+        if fr != 0 {
+            while fr % 10 == 0 {
+                width -= 1;
+                fr /= 10
             }
-            if flag == '-' {
-                num *= -1;
-            }
-            Some(num)
-        } else {
-            Some(0)
+            write!(f, ".{:0width$}", fr)?;
         }
+        Ok(())
     }
+}
 
-    fn read_number(&mut self) -> Option<f64> {
-        let num = self.read_integer_part()?;
-        let num = num + self.read_decimal_part()?;
-        let e = self.read_exp_part()?;
-        Some(num * 10.0_f64.powi(e))
-    }
-
-    fn read_wordsym(&mut self) -> Option<String> {
-        let mut name = String::from(self.src.next_if(Self::is_wordsym_1st)?);
-        while let Some(ch) = self.src.next_if(|&ch| {
-            ch.is_ascii_lowercase() || ch.is_ascii_digit() || "!$&*+-/<=>_.?@".contains(ch)
-        }) {
-            name.push(ch)
-        }
-        Some(name)
-    }
-
-    pub fn read(&mut self) -> PoseResult {
-        self.skip_space();
-        match self.src.peek() {
-            None => {
-                self.src.next();
-                Ok(PoseType::EOF)
-            }
-            Some(';') => {
-                self.src.next();
-                while let Some(item) = self.src.next() {
-                    if item == '\r' || item == '\n' {
-                        break;
-                    }
-                }
-                self.read()
-            }
-            Some('(') => {
-                self.src.next();
-                let mut v = Vec::<PoseType>::new();
-                while {
-                    self.skip_space();
-                    !self.src.next_if_eq(&')').is_some()
-                } {
-                    let item = self.read()?;
-                    if item == PoseType::EOF {
-                        Err(PoseError::NothingClosingParenthesis)?
-                    }
-                    v.push(item);
-                }
-                Ok(PoseType::List(v))
-            }
-            Some('"') => {
-                self.src.next();
-                Ok(PoseType::String(
-                    self.read_string().ok_or(PoseError::InvalidString)?,
-                ))
-            }
-            Some('-') => {
-                self.src.next();
-                if self.src.peek().map_or(false, char::is_ascii_digit) {
-                    Ok(PoseType::Number(
-                        -self.read_number().ok_or(PoseError::InvalidNumber)?,
-                    ))
-                } else if let Some(ch) = self.src.next_if(Self::is_signsym_2nd) {
-                    let mut sym = String::from('-');
-                    sym.push(ch);
-                    while let Some(ch) = self.src.next_if(Self::is_signsym_cont) {
-                        sym.push(ch);
-                    }
-                    Ok(PoseType::Symbol(sym))
+impl Display for PoseType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            &PoseType::End => write!(f, "EOF"),
+            &PoseType::String(ref str) => write!(f, "\"{}\"", str),
+            &PoseType::Number(num) => {
+                let log10 = num.abs().log10();
+                let width = log10.ceil() as i32;
+                const PREC: i32 = 15;
+                if (width <= PREC && num >= 0.1) || (width <= PREC && num <= -0.1) {
+                    write!(f, "{}", FixedPoint(num))
+                } else if width > PREC || num < 0.1 {
+                    let e = 10.0_f64.powi(width - 1);
+                    write!(f, "{}e{}", FixedPoint(num / e), width - 1)?;
+                    Ok(())
                 } else {
-                    Ok(PoseType::Symbol(String::from("-")))
+                    write!(f, "{:.*e}", PREC as usize, num)
                 }
             }
-            Some('+') => {
-                self.src.next();
-                if let Some(ch) = self.src.next_if(Self::is_signsym_2nd) {
-                    let mut sym = String::from('+');
-                    sym.push(ch);
-                    while let Some(ch) = self.src.next_if(Self::is_signsym_cont) {
-                        sym.push(ch);
+            &PoseType::Symbol(ref str) => write!(f, "{}", str),
+            &PoseType::List(ref v) => {
+                write!(f, "(")?;
+                let mut iter = (&v).into_iter();
+                if let Some(first) = iter.next() {
+                    write!(f, "{}", first)?;
+                    for &ref e in iter {
+                        write!(f, "{}", e)?;
                     }
-                    Ok(PoseType::Symbol(sym))
-                } else {
-                    Ok(PoseType::Symbol(String::from("+")))
+                    write!(f, ")")?;
                 }
+                Ok(())
             }
-            Some(ch) if ch.is_ascii_digit() => Ok(PoseType::Number(
-                self.read_number().ok_or(PoseError::InvalidNumber)?,
-            )),
-            Some(ch) if Self::is_wordsym_1st(ch) => Ok(PoseType::Symbol(
-                self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
-            )),
-            Some(':') => {
-                self.src.next();
-                Ok(PoseType::Symbol(
-                    String::from(":") + &self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
-                ))
-            }
-            _ => Err(PoseError::InvalidFirstLetter),
         }
     }
 }
