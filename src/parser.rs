@@ -231,3 +231,14 @@ impl std::str::FromStr for PoseType {
         Ok(obj)
     }
 }
+
+impl<T: std::iter::Iterator<Item = char>> Iterator for Pose<T> {
+    type Item = PoseResult;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.read() {
+            Ok(PoseType::End) => None,
+            e @ Ok(_) => Some(e),
+            e @ Err(_) => Some(e),
+        }
+    }
+}
