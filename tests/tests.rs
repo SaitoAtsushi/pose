@@ -1,108 +1,92 @@
-use pose::*;
+#![cfg(test)]
 
-fn test_parse(testcase: &str, expect_result: Result<PoseType, PoseError>) {
-    let mut parser = Pose::new(testcase.chars());
-    let result = parser.read();
-    assert_eq!(result, expect_result);
+use pose::{Pose, PoseError, PoseError::*, PoseType, PoseType::*};
+
+fn pose_str(s: &str) -> Result<PoseType, PoseError> {
+    Ok(String(s.to_string()))
+}
+
+fn pose_sym(s: &str) -> Result<PoseType, PoseError> {
+    Ok(Symbol(s.to_string()))
+}
+
+fn pose_num(s: f64) -> Result<PoseType, PoseError> {
+    Ok(Number(s))
+}
+
+macro_rules! pose_list {
+    ($($e:expr), *) => {
+        pose::PoseType::List(vec![$($e),*])
+    };
 }
 
 #[test]
-fn it_works() {
-    test_parse(";abc\n\"abc\"", Ok(PoseType::String("abc".into())));
-    test_parse(" :abc\n\"abc\"", Ok(PoseType::Symbol(":abc".into())));
-    test_parse(" :@", Err(PoseError::InvalidSymbol));
-    test_parse("ABC", Err(PoseError::InvalidFirstLetter));
-    test_parse("\"a\\\"bc\"", Ok(PoseType::String("a\"bc".into())));
-    test_parse("\"a\\bc\"", Err(PoseError::InvalidString));
-    test_parse("  def;ghi", Ok(PoseType::Symbol("def".into())));
-    test_parse(
-        " jkl-mno123;comment",
-        Ok(PoseType::Symbol("jkl-mno123".into())),
-    );
-    test_parse("0", Ok(PoseType::Number(0.0)));
-    test_parse("1", Ok(PoseType::Number(1.0)));
-    test_parse("-150.05", Ok(PoseType::Number(-150.05)));
-    test_parse("-2.34", Ok(PoseType::Number(-2.34)));
-    test_parse("-2.abc", Err(PoseError::InvalidNumber));
-    test_parse("-2.0E+12", Ok(PoseType::Number(-2000000000000.0)));
-    test_parse("-2.0e12", Ok(PoseType::Number(-2000000000000.0)));
-    test_parse("-0abc", Ok(PoseType::Number(-0.0)));
-    test_parse("+abc", Ok(PoseType::Symbol("+abc".into())));
-    test_parse("-abc", Ok(PoseType::Symbol("-abc".into())));
-    test_parse("+12", Ok(PoseType::Symbol("+".into())));
-    test_parse(
-        "(\"jkl\" \"mnf\")",
-        Ok(PoseType::List(vec![
-            PoseType::String("jkl".into()),
-            PoseType::String("mnf".into()),
-        ])),
-    );
-    test_parse(
-        "(\"jkl\" \"mnf\"",
-        Err(PoseError::NothingClosingParenthesis),
-    );
-    test_parse(
-        "(a (b c) d)",
-        Ok(PoseType::List(vec![
-            PoseType::Symbol("a".into()),
-            PoseType::List(vec![
-                PoseType::Symbol("b".into()),
-                PoseType::Symbol("c".into()),
+fn parse_one() {
+    let testcase = [
+        (";abc\n\"abc\"", pose_str("abc")),
+        (" :abc\n\"abc\"", pose_sym(":abc")),
+        (" :@", InvalidSymbol.into()),
+        ("ABC", InvalidFirstLetter.into()),
+        ("\"a\\\"bc\"", pose_str("a\"bc")),
+        ("\"a\\bc\"", Err(InvalidString)),
+        ("  def;ghi", pose_sym("def")),
+        (" jkl-mno123;comment", pose_sym("jkl-mno123")),
+        ("0", pose_num(0.0)),
+        ("1", pose_num(1.0)),
+        ("-150.05", pose_num(-150.05)),
+        ("-2.34", pose_num(-2.34)),
+        ("-2.abc", Err(InvalidNumber)),
+        ("-2.0E+12", pose_num(-2.0E+12)),
+        ("-2.0e12", pose_num(-2.0e12)),
+        ("-0abc", pose_num(-0.0)),
+        ("+abc", pose_sym("+abc")),
+        ("-abc", pose_sym("-abc")),
+        ("+12", pose_sym("+")),
+        (
+            "(\"jkl\" \"mnf\")",
+            Ok(pose_list![String("jkl".into()), String("mnf".into())]),
+        ),
+        ("(\"jkl\" \"mnf\"", Err(NothingClosingParenthesis)),
+        (
+            "(a (b c) d)",
+            Ok(pose_list![
+                Symbol("a".into()),
+                pose_list![Symbol("b".into()), Symbol("c".into())],
+                Symbol("d".into())
             ]),
-            PoseType::Symbol("d".into()),
-        ])),
-    );
-    test_parse(
-        "(-0123)",
-        Ok(PoseType::List(vec![
-            PoseType::Number(-0.0),
-            PoseType::Number(123.0),
-        ])),
-    );
-    test_parse(
-        "(+123)",
-        Ok(PoseType::List(vec![
-            PoseType::Symbol("+".into()),
-            PoseType::Number(123.0),
-        ])),
-    );
-    test_parse(";nothing object", Ok(PoseType::End));
-    test_parse("@abc", Err(PoseError::InvalidFirstLetter));
+        ),
+        ("(-0123)", Ok(pose_list![Number(-0.0), Number(123.0)])),
+        ("(+123)", Ok(pose_list![Symbol("+".into()), Number(123.0)])),
+        (";nothing object", Ok(End)),
+        ("@abc", Err(InvalidFirstLetter)),
+    ];
 
-    assert_eq!("abc".parse(), Ok(PoseType::Symbol("abc".into())));
-    assert_eq!("abc n".parse::<PoseType>(), Err(PoseError::InvalidEnd));
+    for (&ref s, expect_result) in &testcase {
+        let mut parser = Pose::new(s.chars());
+        let result = parser.read();
+        assert_eq!(&result, expect_result);
+    }
+}
 
-    assert_eq!(
-        format!("{}", " ;comment\nabc ".parse::<PoseType>().unwrap()),
-        "abc"
-    );
-    assert_eq!(format!("{}", "1.543".parse::<PoseType>().unwrap()), "1.543");
-    assert_eq!(
-        format!("{}", "150.05".parse::<PoseType>().unwrap()),
-        "150.05"
-    );
-    assert_eq!(
-        format!("{}", "-150.05".parse::<PoseType>().unwrap()),
-        "-150.05"
-    );
-    assert_eq!(
-        format!("{}", "1.5e100".parse::<PoseType>().unwrap()),
-        "1.5e100"
-    );
-    assert_eq!(
-        format!("{}", "150000000000000".parse::<PoseType>().unwrap()),
-        "150000000000000"
-    );
-    assert_eq!(
-        format!("{}", "1500000000000000".parse::<PoseType>().unwrap()),
-        "1.5e15"
-    );
-    assert_eq!(
-        format!("{}", "-1500000000000000".parse::<PoseType>().unwrap()),
-        "-1.5e15"
-    );
-    assert_eq!(
-        format!("{}", "0.000000532".parse::<PoseType>().unwrap()),
-        "5.32e-7"
-    );
+#[test]
+fn parse_and_write() {
+    let testcase = [
+        ("abc", "abc"),
+        (" ;comment\nabc ", "abc"),
+        ("1.543", "1.543"),
+        ("150.05", "150.05"),
+        ("-150.05", "-150.05"),
+        ("1.5e100", "1.5e100"),
+        ("150000000000000", "150000000000000"),
+        ("1500000000000000", "1.5e15"),
+        ("-1500000000000000", "-1.5e15"),
+        ("0.000000532", "5.32e-7"),
+    ];
+
+    for (&ref s, &ref expected_result) in &testcase {
+        assert_eq!(
+            format!("{}", s.parse::<PoseType>().unwrap()),
+            expected_result
+        );
+    }
 }
