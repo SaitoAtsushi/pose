@@ -52,7 +52,18 @@ impl Display for PoseType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             &PoseType::End => write!(f, "EOF"),
-            &PoseType::String(ref str) => write!(f, "\"{}\"", str),
+            &PoseType::String(ref str) => {
+                write!(f, "\"")?;
+                for ch in str.chars() {
+                    if ch == '\\' || ch == '\"' {
+                        write!(f, "\\{}", ch)?;
+                    } else {
+                        write!(f, "{}", ch)?;
+                    }
+                }
+                write!(f, "\"")?;
+                Ok(())
+            }
             &PoseType::Number(num) => {
                 let log10 = num.abs().log10();
                 let width = log10.ceil() as i32;
