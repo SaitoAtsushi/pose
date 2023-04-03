@@ -85,7 +85,7 @@ impl Display for PoseType {
                 if let Some(first) = iter.next() {
                     write!(f, "{}", first)?;
                     for &ref e in iter {
-                        write!(f, "{}", e)?;
+                        write!(f, " {}", e)?;
                     }
                     write!(f, ")")?;
                 }
