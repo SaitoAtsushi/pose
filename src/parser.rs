@@ -1,6 +1,18 @@
 pub use crate::types::*;
 
-type PoseResult = std::result::Result<PoseType, PoseError>;
+pub type PoseResult = std::result::Result<PoseType, PoseError>;
+
+impl From<PoseError> for PoseResult {
+    fn from(p: PoseError) -> PoseResult {
+        Err(p)
+    }
+}
+
+impl From<PoseType> for PoseResult {
+    fn from(p: PoseType) -> PoseResult {
+        Ok(p)
+    }
+}
 
 pub struct Pose<T: std::iter::Iterator<Item = char>> {
     src: std::iter::Peekable<T>,
