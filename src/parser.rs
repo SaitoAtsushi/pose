@@ -37,12 +37,24 @@ impl<T: Iterator<Item = char>> Pose<T> {
         }
     }
 
+    fn is_whitespace(ch: char) -> bool {
+        ch.is_ascii_whitespace() || ch == '\x0b'
+    }
+
+    fn is_delimiter(ch: char) -> bool {
+        Self::is_whitespace(ch) || "();".contains(ch)
+    }
+
     fn skip_space(&mut self) {
-        while self
-            .src
-            .next_if(|&ch| ch.is_ascii_whitespace() || ch == '\x0b')
-            .is_some()
-        {}
+        while self.src.next_if(|&ch| Self::is_whitespace(ch)).is_some() {}
+    }
+
+    fn check_delimiter(&mut self, t: PoseType) -> PoseResult {
+        match self.src.peek() {
+            Some(&ch) if Self::is_delimiter(ch) => Ok(t),
+            None => Ok(t),
+            _ => Err(PoseError::InvalidDelimiter),
+        }
     }
 
     fn read_string(&mut self) -> Option<String> {
@@ -168,51 +180,53 @@ impl<T: Iterator<Item = char>> Pose<T> {
             }
             Some('"') => {
                 self.src.next();
-                Ok(PoseType::String(
-                    self.read_string().ok_or(PoseError::InvalidString)?,
-                ))
+                let t = PoseType::String(self.read_string().ok_or(PoseError::InvalidString)?);
+                self.check_delimiter(t)
             }
             Some('-') => {
                 self.src.next();
-                if self.src.peek().map_or(false, char::is_ascii_digit) {
-                    Ok(PoseType::Number(
-                        -self.read_number().ok_or(PoseError::InvalidNumber)?,
-                    ))
+                let t = if self.src.peek().map_or(false, char::is_ascii_digit) {
+                    PoseType::Number(-self.read_number().ok_or(PoseError::InvalidNumber)?)
                 } else if let Some(ch) = self.src.next_if(Self::is_signsym_2nd) {
                     let mut sym = String::from('-');
                     sym.push(ch);
                     while let Some(ch) = self.src.next_if(Self::is_signsym_cont) {
                         sym.push(ch);
                     }
-                    Ok(PoseType::Symbol(sym))
+                    PoseType::Symbol(sym)
                 } else {
-                    Ok(PoseType::Symbol(String::from("-")))
-                }
+                    PoseType::Symbol(String::from("-"))
+                };
+                self.check_delimiter(t)
             }
             Some('+') => {
                 self.src.next();
-                if let Some(ch) = self.src.next_if(Self::is_signsym_2nd) {
+                let t = if let Some(ch) = self.src.next_if(Self::is_signsym_2nd) {
                     let mut sym = String::from('+');
                     sym.push(ch);
                     while let Some(ch) = self.src.next_if(Self::is_signsym_cont) {
                         sym.push(ch);
                     }
-                    Ok(PoseType::Symbol(sym))
+                    PoseType::Symbol(sym)
                 } else {
-                    Ok(PoseType::Symbol(String::from("+")))
-                }
+                    PoseType::Symbol(String::from("+"))
+                };
+                self.check_delimiter(t)
             }
-            Some(ch) if ch.is_ascii_digit() => Ok(PoseType::Number(
-                self.read_number().ok_or(PoseError::InvalidNumber)?,
-            )),
-            Some(ch) if Self::is_wordsym_1st(ch) => Ok(PoseType::Symbol(
-                self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
-            )),
+            Some(ch) if ch.is_ascii_digit() => {
+                let t = PoseType::Number(self.read_number().ok_or(PoseError::InvalidNumber)?);
+                self.check_delimiter(t)
+            }
+            Some(ch) if Self::is_wordsym_1st(ch) => {
+                let t = PoseType::Symbol(self.read_wordsym().ok_or(PoseError::InvalidSymbol)?);
+                self.check_delimiter(t)
+            }
             Some(':') => {
                 self.src.next();
-                Ok(PoseType::Symbol(
+                let t = PoseType::Symbol(
                     String::from(":") + &self.read_wordsym().ok_or(PoseError::InvalidSymbol)?,
-                ))
+                );
+                self.check_delimiter(t)
             }
             _ => Err(PoseError::InvalidFirstLetter),
         }

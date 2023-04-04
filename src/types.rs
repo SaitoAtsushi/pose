@@ -15,6 +15,7 @@ pub enum PoseError {
     InvalidNumber,
     InvalidSymbol,
     InvalidEnd,
+    InvalidDelimiter,
     NothingClosingParenthesis,
     InvalidFirstLetter,
 }

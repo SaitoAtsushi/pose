@@ -38,10 +38,10 @@ fn parse_one() {
         ("-2.abc", Err(InvalidNumber)),
         ("-2.0E+12", pose_num(-2.0E+12)),
         ("-2.0e12", pose_num(-2.0e12)),
-        ("-0abc", pose_num(-0.0)),
+        ("-0abc", Err(InvalidDelimiter)),
         ("+abc", pose_sym("+abc")),
         ("-abc", pose_sym("-abc")),
-        ("+12", pose_sym("+")),
+        ("+12", Err(InvalidDelimiter)),
         (
             "(\"jkl\" \"mnf\")",
             Ok(pose_list![String("jkl".into()), String("mnf".into())]),
@@ -55,8 +55,9 @@ fn parse_one() {
                 Symbol("d".into())
             ]),
         ),
-        ("(-0123)", Ok(pose_list![Number(-0.0), Number(123.0)])),
-        ("(+123)", Ok(pose_list![Symbol("+".into()), Number(123.0)])),
+        ("(-0 123)", Ok(pose_list![Number(-0.0), Number(123.0)])),
+        ("(-0123)", Err(InvalidDelimiter)),
+        ("(+123)", Err(InvalidDelimiter)),
         (";nothing object", Ok(End)),
         ("@abc", Err(InvalidFirstLetter)),
     ];
@@ -82,7 +83,7 @@ fn parse_and_write() {
         ("-1500000000000000", "-1.5e15"),
         ("0.000000532", "5.32e-7"),
         ("\"ab\\\"c\"", "\"ab\\\"c\""),
-        ("(1a)", "(1 a)")
+        ("(1 a)", "(1 a)"),
     ];
 
     for (&ref s, &ref expected_result) in &testcase {
